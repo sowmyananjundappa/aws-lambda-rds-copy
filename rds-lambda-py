@@ -1,0 +1,42 @@
+import boto3
+import json
+import pickle
+import re
+import time
+from time import gmtime, strftime
+from botocore.exceptions import ClientError
+date = strftime("%Y-%m-%d-%H-%M-%S", gmtime())
+SnapshotFormat = '%(name)s-%(date)s'
+
+#Regex format to match the Instance id
+def parse_description(dbinstance):
+    regex = r'prod'
+    matches = re.search(regex, dbinstance)
+    if matches:
+        return matches.group()
+    else:
+        pass
+
+#Function to take snapshot of the rds
+def rds_snapshot(dbname):
+    client = boto3.client('rds',region_name='us-east-1')
+    snapshot_identifier = SnapshotFormat % {'name': dbname, 'date': date}
+    print(snapshot_identifier)
+    try:
+        respose = client.create_db_snapshot(
+            DBSnapshotIdentifier=snapshot_identifier,
+            DBInstanceIdentifier=dbname
+            )
+    except ClientError as e:
+        if 'DBSnapshotAlreadyExists' != e:
+            raise
+        print('snapshot already exist')
+
+def lambda_handler(event,context):
+    client = boto3.client('rds',region_name='us-east-1')
+    response = client.describe_db_instances()
+    for rdsname in (response['DBInstances']):
+        dbname = rdsname['DBInstanceIdentifier']
+        dbinstance = parse_description(dbname)
+        if(dbinstance == 'prod'):
+            rds_snapshot(dbname)
